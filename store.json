@@ -1,0 +1,31 @@
+{
+  "settings": {
+    "appLink": "",
+    "contact": "q1ban",
+    "buyer": "ambssl",
+    "featured": "cp-zip-korea",
+    "tape": ["Stone Island", "C.P. Company", "Оригиналы", "Архив", "Lonsdale", "Gutterade", "Скупка S-M"],
+    "admins": []
+  },
+  "brands": {
+    "si": { "name": "Stone Island", "mono": "SI" },
+    "cp": { "name": "C.P. Company", "mono": "CP" },
+    "lonsdale": { "name": "Lonsdale", "mono": "LD" },
+    "gutterade": { "name": "Gutterade", "mono": "GT" }
+  },
+  "products": [
+    { "id": "cp-hoodie", "brand": "cp", "kind": "худи", "title": "Худи", "size": "S-M", "fit": ["S", "M"], "cond": 9, "price": 10790, "seller": "ambssl", "haggle": true, "note": "Подстёрлась линза", "status": "stock", "photos": [] },
+    { "id": "si-hoodie-navy-2019", "brand": "si", "kind": "худи", "title": "Худи Navy Blue 2019", "size": "M-L (по бирке XL)", "fit": ["M", "L"], "cond": 9, "price": 12790, "seller": "ambssl", "haggle": true, "status": "stock", "photos": [] },
+    { "id": "cp-zip-korea", "brand": "cp", "kind": "зипка", "title": "Зипка для корейского рынка", "size": "M", "fit": ["M"], "cond": 9, "price": 15000, "seller": "q1ban", "status": "stock", "photos": [],
+      "desc": "Кофта выпускалась для корейского рынка, благодаря чему получила легендарные желтоватые линзы." },
+    { "id": "lonsdale-track", "brand": "lonsdale", "kind": "олимпийка", "title": "Олимпийка", "size": "M", "fit": ["M"], "cond": 9, "price": 5000, "seller": "q1ban", "status": "stock", "photos": [] },
+    { "id": "si-junior-sweat", "brand": "si", "kind": "свитшот", "title": "Свитшот Junior", "size": "XS-S", "fit": ["XS", "S"], "cond": 9, "price": 6000, "seller": "q1ban", "status": "stock", "photos": [] },
+    { "id": "gutterade-cap", "brand": "gutterade", "kind": "кепка", "title": "Кепка", "size": "O/S", "fit": ["OS"], "cond": 9, "price": 5500, "seller": "q1ban", "status": "stock", "photos": [] },
+    { "id": "si-shadow-crew-2013", "brand": "si", "kind": "свитшот", "title": "Shadow Project Crewneck Nylon 2013", "size": "S-M", "fit": ["S", "M"], "cond": 10, "status": "sold", "photos": [] },
+    { "id": "cp-zip-vintage", "brand": "cp", "kind": "зипка", "title": "Зипка, винтаж для корейского рынка", "size": "S-M", "fit": ["S", "M"], "cond": 9, "status": "sold", "photos": [],
+      "desc": "Винтаж для корейского рынка. Оригинал, любые проверки." },
+    { "id": "si-piattina-8222", "brand": "si", "kind": "куртка", "title": "Куртка Piattina 82/22", "size": "M (по бирке L)", "fit": ["M"], "cond": 10, "status": "sold", "photos": [],
+      "desc": "Культовая вещь из лимитированной юбилейной капсулы Stone Island 40th Anniversary «82/22». Вышла в весенне-летней коллекции 2022 к 40-летию бренда (1982-2022)." },
+    { "id": "cp-shell-r", "brand": "cp", "kind": "куртка", "title": "Куртка Shell-R", "size": "S-M", "fit": ["S", "M"], "cond": 9, "status": "sold", "photos": [] }
+  ]
+}
