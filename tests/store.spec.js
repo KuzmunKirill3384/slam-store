@@ -113,6 +113,42 @@ test.describe('витрина', () => {
   });
 });
 
+test.describe('вёрстка и загрузка', () => {
+  const many = Array.from({ length: 6 }, (_, i) => product('p' + i, { title: 'Очень длинное название вещи номер ' + i, lot: i + 1 }));
+
+  for (const width of [320, 375, 430]) {
+    test(`ширина ${width}: нет сдвига вбок, меню не закрывает контент`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 700 });
+      await open(page, { user: ADMIN, store: makeStore(many) });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+      const r = await page.evaluate(() => ({
+        grid: document.querySelector('#grid').getBoundingClientRect().bottom,
+        nav: document.querySelector('#nav').getBoundingClientRect().top,
+      }));
+      expect(r.grid).toBeLessThanOrEqual(r.nav);
+    });
+  }
+
+  test('нет внешних шрифтов, свои загружаются', async ({ page }) => {
+    const external = [];
+    page.on('request', r => { if (/fonts\.(googleapis|gstatic)/.test(r.url())) external.push(r.url()); });
+    await open(page);
+    await page.evaluate(() => document.fonts.ready);
+    expect(external).toEqual([]);
+    expect(await page.evaluate(() => [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replace(/"/g, '')))).toContain('Unbounded');
+  });
+
+  test('в сетке превью, в карточке полное фото', async ({ page }) => {
+    await page.route(/\/img\//, r => r.fulfill({ status: 404 }));
+    const p = product('a', { photos: ['img/a.jpg'], thumbs: { 'img/a.jpg': 'img/a-s.webp' } });
+    await open(page, { store: makeStore([p]) });
+    await expect(page.locator('#grid .card img')).toHaveAttribute('src', 'img/a-s.webp');
+    await page.locator('[data-id="a"]').click();
+    await expect(page.locator('#sheet .art img')).toHaveAttribute('src', 'img/a.jpg');
+  });
+});
+
 test.describe('админка с токеном', () => {
   async function openAdmin(page, store) {
     const repo = await fakeGitHub(page, store);
@@ -140,6 +176,42 @@ test.describe('админка с токеном', () => {
     await expect(page.locator('.item-t')).toHaveText('Кепка новая');
     expect(repo.store.products[0].lot).toBe(5);
     expect(repo.store.settings.nextLot).toBe(6);
+  });
+
+  const PNG = { name: 'a.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg==', 'base64') };
+
+  test('фото: JPEG и превью попадают в коммит, удаляются вместе', async ({ page }) => {
+    const repo = await openAdmin(page, makeStore());
+    await page.locator('[data-new]').click();
+    await page.fill('#e-title', 'Кепка');
+    await page.fill('#e-size', 'M');
+    await page.fill('#e-price', '100');
+    await page.fill('#e-seller', 'ambssl');
+    await page.setInputFiles('#e-file', PNG);
+    await expect(page.locator('#e-photos img')).toHaveCount(1);
+    await page.locator('[data-save]').click();
+    await expect(page.locator('.item-t')).toHaveText('Кепка');
+    const p = repo.store.products[0];
+    expect(p.photos[0]).toMatch(/\.jpg$/);
+    const small = p.thumbs[p.photos[0]];
+    expect(small).toMatch(/-s\.webp$/);
+    const paths = repo.trees[0].map(e => e.path);
+    expect(paths).toEqual(expect.arrayContaining([p.photos[0], small]));
+
+    await page.locator('.item').click();
+    await page.locator('[data-del]').click();
+    await page.locator('[data-del]').click();
+    await expect(page.locator('#toast')).toHaveText('Вещь удалена');
+    expect(repo.store.products).toHaveLength(0);
+  });
+
+  test('больше 10 фото нельзя', async ({ page }) => {
+    await openAdmin(page, makeStore());
+    await page.locator('[data-new]').click();
+    await page.setInputFiles('#e-file', Array.from({ length: 12 }, (_, i) => ({ ...PNG, name: `${i}.png` })));
+    await expect(page.locator('#e-photos img')).toHaveCount(10);
+    await expect(page.locator('#toast')).toContainText('Не больше 10');
+    await expect(page.locator('#e-add')).toHaveCount(0);
   });
 
   test('продавец с неверным username не сохраняется', async ({ page }) => {
@@ -233,7 +305,8 @@ test.describe('админка через Worker', () => {
     await expect(page.locator('.item-t')).toHaveText('Кепка');
     const put = srv.calls.find(c => c.method === 'PUT');
     expect(put.body.photos).toEqual(['img/srv-1.jpg']);
-    expect(put.body.uploads).toEqual({ 'img/srv-1.jpg': 'a'.repeat(40) });
+    expect(put.body.thumbs).toEqual({ 'img/srv-1.jpg': 'img/srv-2.jpg' });
+    expect(put.body.uploads).toEqual({ 'img/srv-1.jpg': 'a'.repeat(40), 'img/srv-2.jpg': 'a'.repeat(40) });
     expect(put.body.publish).toBe(true);
     expect(ghCalls).toBe(0);
   });

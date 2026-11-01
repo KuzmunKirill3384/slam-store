@@ -5,12 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Slam Store</title>
 <meta name="theme-color" content="#0E100C">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&family=Unbounded:wght@500;700;900&display=swap">
+<meta name="description" content="Stone Island, C.P. Company и другой архив. Оригиналы, связь с продавцом напрямую в Telegram.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SLAM STORE">
+<meta property="og:description" content="Stone Island, C.P. Company и другой архив. Оригиналы, связь с продавцом напрямую в Telegram.">
+<meta property="og:url" content="https://kuzmunkirill3384.github.io/slam-store/">
+<meta property="og:image" content="https://kuzmunkirill3384.github.io/slam-store/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/unbounded-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 [hidden]{display:none!important}
+@font-face{font-family:"Golos Text";font-weight:400 600;font-display:swap;src:url(fonts/golos-text-cyrillic.woff2) format("woff2");unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:"Golos Text";font-weight:400 600;font-display:swap;src:url(fonts/golos-text-latin.woff2) format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:"JetBrains Mono";font-weight:500 700;font-display:swap;src:url(fonts/jetbrains-mono-cyrillic.woff2) format("woff2");unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:"JetBrains Mono";font-weight:500 700;font-display:swap;src:url(fonts/jetbrains-mono-latin.woff2) format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:"Unbounded";font-weight:500 900;font-display:swap;src:url(fonts/unbounded-cyrillic.woff2) format("woff2");unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:"Unbounded";font-weight:500 900;font-display:swap;src:url(fonts/unbounded-latin.woff2) format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 :root{
   /* Макет: архив-бирка. Графит с оливой, янтарная линза как единственный яркий акцент, бирки из кости */
   --ink:#0E100C;
@@ -57,7 +69,7 @@ a{color:inherit;text-decoration:none}
 .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--lens);animation:blink 2.4s ease-in-out infinite}
 @keyframes blink{50%{box-shadow:0 0 0 6px rgba(237,184,63,0);opacity:.55}0%,100%{box-shadow:0 0 0 0 rgba(237,184,63,.45)}}
 .logo{margin:0;font-family:var(--f-display);font-weight:900;font-size:clamp(54px,18.5vw,128px);line-height:.86;letter-spacing:-.045em;display:grid}
-.logo .o{color:transparent;-webkit-text-stroke:1.6px var(--bone);display:flex;align-items:center}
+.logo .o{color:var(--ink);-webkit-text-stroke:3.2px var(--bone);paint-order:stroke fill;display:flex;align-items:center}
 .lens{flex:none;display:inline-block;width:.7em;height:.7em;margin:0 .035em 0 .02em;border-radius:50%;background:radial-gradient(circle at 34% 30%,#FFF4CC 0 5%,#F7CC5B 16%,var(--lens) 34%,var(--lens-deep) 66%,#3A2405 100%);box-shadow:inset 0 0 0 .055em #2A2112,0 0 0 1.6px var(--bone),0 0 .5em rgba(237,184,63,.45);animation:glow 4s ease-in-out infinite}
 @keyframes glow{50%{box-shadow:inset 0 0 0 .055em #2A2112,0 0 0 1.6px var(--bone),0 0 .9em rgba(237,184,63,.7)}}
 .lead{margin:0;color:var(--mute);max-width:40ch;text-wrap:pretty}
@@ -153,7 +165,7 @@ a{color:inherit;text-decoration:none}
 /* ---------- Разделы ---------- */
 .v-head{position:relative;display:grid;gap:10px;padding-block:8px 22px}
 .v-title{margin:0;font-family:var(--f-display);font-weight:900;font-size:clamp(34px,10vw,56px);line-height:.95;letter-spacing:-.04em;text-wrap:balance}
-.v-title .o{color:transparent;-webkit-text-stroke:1.4px var(--bone)}
+.v-title .o{color:var(--ink);-webkit-text-stroke:2.8px var(--bone);paint-order:stroke fill}
 .block{display:grid;gap:12px;padding-block:26px 4px}
 .block h3{margin:0}
 .checks{margin:0;padding:0;list-style:none;display:grid;border:1px dashed var(--line);border-radius:var(--r)}
@@ -453,6 +465,7 @@ const FITS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'OS'];
 const KINDS = ['худи', 'зипка', 'свитшот', 'куртка', 'олимпийка', 'кофта', 'футболка', 'лонгслив', 'жилет', 'штаны', 'кепка', 'шапка', 'сумка'];
 const STATUS = { stock: 'В наличии', reserved: 'Бронь', sold: 'Продано' };
 const RANK = { stock: 0, reserved: 1, sold: 2 };
+const MAX_PHOTOS = 10;
 
 /* ---------- Telegram ---------- */
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -532,6 +545,7 @@ let DATA = null;
 let order = new Map();
 const localSrc = {}; // превью только что загруженных фото, пока GitHub Pages пересобирается
 const srcOf = path => localSrc[path] || path;
+const smallPhoto = p => p.photos[0] && ((p.thumbs || {})[p.photos[0]] || p.photos[0]);
 const brandOf = k => (DATA && DATA.brands[k]) || { name: k, mono: String(k).slice(0, 2).toUpperCase() };
 const full = p => `${brandOf(p.brand).name} ${p.title}`;
 const lot = p => pad(p.lot || DATA.products.length - order.get(p.id));
@@ -583,7 +597,7 @@ function card(p, i) {
   const fav = state.favs.has(p.id);
   const sold = p.status === 'sold';
   return `<article class="card${sold ? ' sold' : ''}" style="--i:${i}" data-id="${esc(p.id)}" tabindex="0" role="button" aria-label="${esc(full(p))}">
-    ${art(p, p.photos[0])}
+    ${art(p, smallPhoto(p))}
     <button class="fav" data-fav="${esc(p.id)}" aria-pressed="${fav}" aria-label="${fav ? 'Убрать из избранного' : 'В избранное'}">${ICON.heart}</button>
     <div class="cb">
       <div class="mono muted">${esc(brandOf(p.brand).name)}</div>
@@ -1056,7 +1070,7 @@ function setupHTML() {
 }
 
 function thumb(p) {
-  const src = p.photos[0];
+  const src = smallPhoto(p);
   return `<div class="thumb">${src ? `<img src="${esc(srcOf(src))}" alt="" loading="lazy">`
     : `<div class="art-fill" ${brandAttr(p.brand)}><span class="t-mono">${esc(brandOf(p.brand).mono)}</span></div>`}</div>`;
 }
@@ -1415,7 +1429,8 @@ function openForm(id) {
   const src = isNew ? { status: 'stock', cond: 9, brand: Object.keys(DATA.brands)[0] } : DATA.products.find(x => x.id === id);
   if (!src) return;
   const p = JSON.parse(JSON.stringify(src));
-  ed = { id: p.id || 'item-' + uid36(), isNew, photos: (p.photos || []).map(path => ({ path, src: srcOf(path) })), removed: [] };
+  const thumbs = p.thumbs || {};
+  ed = { id: p.id || 'item-' + uid36(), isNew, photos: (p.photos || []).map(path => ({ path, src: srcOf(path), thumbPath: thumbs[path] })), removed: [] };
   openSheet(formHTML(p, isNew), 'form');
   renderPhotos();
 }
@@ -1427,39 +1442,51 @@ function renderPhotos() {
       <button class="ph-x" data-ph-del="${i}" aria-label="Убрать фото">×</button>
       ${i ? `<button class="ph-cover mono" data-ph-cover="${i}">обложка</button>` : '<span class="ph-tag mono">обложка</span>'}
     </div>`).join('') +
-    `<label class="ph-add" id="e-add"><input type="file" id="e-file" class="vh" accept="image/*" multiple>+<span class="mono">фото</span></label>`;
+    (ed.photos.length < MAX_PHOTOS ? `<label class="ph-add" id="e-add"><input type="file" id="e-file" class="vh" accept="image/*" multiple>+<span class="mono">фото</span></label>` : '');
 }
 
-// Сжатие фото на телефоне: до 1400 px по длинной стороне, WebP или JPEG
+// Сжатие на телефоне: фото 1400 px в JPEG, его принимает Telegram для постов в канал,
+// и лёгкое превью 480 px для сетки каталога
 async function compress(file) {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-    const k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
-    const c = document.createElement('canvas');
-    c.width = Math.round(img.naturalWidth * k);
-    c.height = Math.round(img.naturalHeight * k);
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    let blob = await new Promise(r => c.toBlob(r, 'image/webp', 0.82));
-    let ext = 'webp';
-    if (!blob || blob.type !== 'image/webp') { blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85)); ext = 'jpg'; }
-    const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
-    return { ext, dataUrl, b64: dataUrl.split(',')[1] };
+    const render = async (max, type, quality) => {
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k);
+      c.height = Math.round(img.naturalHeight * k);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      const blob = await new Promise(r => c.toBlob(r, type, quality));
+      if (!blob || blob.type !== type) return null;
+      const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+      return { dataUrl, b64: dataUrl.split(',')[1], ext: type === 'image/webp' ? 'webp' : 'jpg' };
+    };
+    const main = await render(1400, 'image/jpeg', 0.85);
+    const small = await render(480, 'image/webp', 0.78) || await render(480, 'image/jpeg', 0.8);
+    if (!main || !small) throw new Error('compress');
+    return { main, small };
   } finally { URL.revokeObjectURL(url); }
 }
 
 async function addPhotos(files) {
   const add = $('#e-add');
   add.classList.add('busy');
+  const room = MAX_PHOTOS - ed.photos.length;
   let bad = 0;
-  for (const file of files) {
+  for (const file of files.slice(0, room)) {
     try {
-      const r = await compress(file);
-      ed.photos.push({ path: `img/${ed.id}-${uid36()}.${r.ext}`, src: r.dataUrl, b64: r.b64 });
+      const { main, small } = await compress(file);
+      const base = `img/${ed.id}-${uid36()}`;
+      ed.photos.push({ path: `${base}.jpg`, src: main.dataUrl, b64: main.b64, thumbPath: `${base}-s.${small.ext}`, thumbSrc: small.dataUrl, thumbB64: small.b64 });
     } catch (e) { bad++; }
   }
   renderPhotos();
   if (bad) toast('Часть фото не открылась. Пришли их в JPG или PNG');
+  else if (files.length > room) toast(`Не больше ${MAX_PHOTOS} фото на вещь`);
 }
 
 function formErr(t) {
@@ -1523,22 +1550,30 @@ async function saveForm(btn) {
     desc: v('e-desc') || undefined, measure: Object.keys(measure).length ? measure : undefined,
     status, photos: ed.photos.map(x => x.path),
   };
+  const thumbMap = Object.fromEntries(ed.photos.filter(x => x.thumbPath).map(x => [x.path, x.thumbPath]));
+  if (Object.keys(thumbMap).length) prod.thumbs = thumbMap;
   const add = {};
-  ed.photos.filter(x => x.b64).forEach(x => { add[x.path] = x.b64; });
+  ed.photos.filter(x => x.b64).forEach(x => { add[x.path] = x.b64; add[x.thumbPath] = x.thumbB64; });
   const snapshot = ed;
   const publish = !!($('#e-publish') && $('#e-publish').checked);
   // Фото уходят на сервер по одному, он сам назначает им пути
   const viaApi = async () => {
     const uploads = {};
     const photos = [];
-    for (const ph of snapshot.photos) {
-      if (!ph.b64) { photos.push(ph.path); continue; }
-      const r = await api('/photos', 'POST', { b64: ph.b64, item: snapshot.id });
+    const thumbs = {};
+    const send = async (b64, src) => {
+      const r = await api('/photos', 'POST', { b64, item: snapshot.id });
       uploads[r.path] = r.sha;
-      photos.push(r.path);
-      localSrc[r.path] = ph.src;
+      localSrc[r.path] = src;
+      return r.path;
+    };
+    for (const ph of snapshot.photos) {
+      const path = ph.b64 ? await send(ph.b64, ph.src) : ph.path;
+      const small = ph.b64 ? await send(ph.thumbB64, ph.thumbSrc) : ph.thumbPath;
+      photos.push(path);
+      if (small) thumbs[path] = small;
     }
-    return api(`/products/${encodeURIComponent(snapshot.id)}`, 'PUT', { ...prod, photos, uploads, newBrand, publish });
+    return api(`/products/${encodeURIComponent(snapshot.id)}`, 'PUT', { ...prod, photos, thumbs, uploads, newBrand, publish });
   };
   try {
     const result = await run(btn, Object.keys(add).length ? 'Загружаю фото…' : 'Сохраняю…',
@@ -1551,7 +1586,7 @@ async function saveForm(btn) {
         if (i >= 0) s.products[i] = prod; else s.products.unshift(prod);
       },
       { add, remove: snapshot.removed }, viaApi);
-    snapshot.photos.forEach(x => { if (x.b64) localSrc[x.path] = x.src; });
+    snapshot.photos.forEach(x => { if (x.b64) { localSrc[x.path] = x.src; localSrc[x.thumbPath] = x.thumbSrc; } });
     closeSheet();
     toast(result && result.published === false ? 'Сохранено, но в канал пост не ушёл' : 'Сохранено. На сайте через минуту');
   } catch (e) { formErr(ghError(e)); }
@@ -1567,7 +1602,7 @@ async function deleteItem(btn) {
   }
   const id = ed.id;
   const p = DATA.products.find(x => x.id === id);
-  const paths = [...(p.photos || []), ...ed.removed];
+  const paths = [...(p.photos || []), ...Object.values(p.thumbs || {}), ...ed.removed];
   try {
     await run(btn, 'Удаляю…', `Удалена: ${full(p)}`, s => {
       s.products = s.products.filter(x => x.id !== id);
@@ -1619,7 +1654,7 @@ document.addEventListener('click', e => {
   if ((el = hit('[data-est]'))) { $$('[data-est]').forEach(b => b.setAttribute('aria-pressed', b === el)); haptic('select'); return; }
   if ((el = hit('[data-ph-del]'))) {
     const [ph] = ed.photos.splice(+el.dataset.phDel, 1);
-    if (ph && !ph.b64) ed.removed.push(ph.path);
+    if (ph && !ph.b64) { ed.removed.push(ph.path); if (ph.thumbPath) ed.removed.push(ph.thumbPath); }
     renderPhotos(); return;
   }
   if ((el = hit('[data-ph-cover]'))) { const [ph] = ed.photos.splice(+el.dataset.phCover, 1); ed.photos.unshift(ph); renderPhotos(); haptic('select'); return; }

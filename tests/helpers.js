@@ -19,8 +19,6 @@ const tgStub = user => `window.Telegram = { WebApp: {
 async function open(page, { user = null, store = makeStore(), hash = '', storage = {}, api = '' } = {}) {
   await page.route('https://telegram.org/js/**', r => r.fulfill({ contentType: 'text/javascript', body: user ? tgStub(user) : '' }));
   await page.route(/localhost:\d+\/store\.json/, r => r.fulfill({ json: store }));
-  await page.route('https://fonts.googleapis.com/**', r => r.abort());
-  await page.route('https://fonts.gstatic.com/**', r => r.abort());
   if (Object.keys(storage).length) await page.addInitScript(s => { Object.entries(s).forEach(([k, v]) => localStorage.setItem(k, v)); }, storage);
   if (api) {
     await page.route(/localhost:\d+\/index\.html/, async r => {
