@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&family=Unbounded:wght@500;700;900&display=swap">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
+[hidden]{display:none!important}
 :root{
   /* Макет: архив-бирка. Графит с оливой, янтарная линза как единственный яркий акцент, бирки из кости */
   --ink:#0E100C;
@@ -857,7 +858,6 @@ function saveAdm() {
   const v = JSON.stringify({ repo: adm.repo, token: adm.token });
   ls.set('slam_gh', v);
   cloudSet('slam_gh', v);
-  ls.set('slam_adm', '1');
 }
 function dropAdm() {
   adm.token = '';
@@ -865,23 +865,21 @@ function dropAdm() {
   cloudDel('slam_gh');
 }
 
+// В списке админов лежат Telegram ID или username
+function isListedAdmin() {
+  if (!tgUser || !DATA) return false;
+  const me = [String(tgUser.id), String(tgUser.username || '').toLowerCase()].filter(Boolean);
+  return DATA.settings.admins.some(a => me.includes(String(a).replace(/^@/, '').toLowerCase()));
+}
 function adminVisible() {
-  if (adm.token || ls.get('slam_adm') === '1' || location.hash === '#admin') return true;
-  return !!(tgUser && DATA && DATA.settings.admins.map(String).includes(String(tgUser.id)));
+  if (adm.token) return true;
+  return inTG ? isListedAdmin() : location.hash === '#admin';
 }
 function updateAdminTab() {
   const on = adminVisible();
   $('#admin-tab').hidden = !on;
   $('#nav').classList.toggle('four', on);
 }
-
-// Секретный вход: пять быстрых нажатий на логотип
-let logoTaps = [];
-$('#logo').addEventListener('click', () => {
-  const now = Date.now();
-  logoTaps = logoTaps.filter(t => now - t < 2000).concat(now);
-  if (logoTaps.length >= 5) { logoTaps = []; ls.set('slam_adm', '1'); updateAdminTab(); haptic('success'); setView('admin'); }
-});
 
 /* ---------- GitHub API ---------- */
 async function gh(path, opts = {}) {
@@ -1012,7 +1010,7 @@ function renderAdmin() {
     </div>`).join('');
   const feat = DATA.products.filter(p => p.status !== 'sold')
     .map(p => `<option value="${esc(p.id)}" ${S.featured === p.id ? 'selected' : ''}>${esc(full(p))}</option>`).join('');
-  const meIn = tgUser && S.admins.map(String).includes(String(tgUser.id));
+  const meIn = isListedAdmin();
 
   box.innerHTML = `
     <div class="adm-bar"><span class="mono"><i class="ok-dot"></i>${esc(adm.repo)}</span><button class="link mono" data-adm-refresh>Обновить</button></div>
@@ -1035,7 +1033,7 @@ function renderAdmin() {
         </div>
         <div class="f"><label class="lbl mono" for="s-tape">Бегущая лента, через запятую</label><textarea class="inp" id="s-tape" rows="2">${esc(S.tape.join(', '))}</textarea></div>
         <div class="f"><label class="lbl mono" for="s-app">Ссылка на Mini App</label><input class="inp" id="s-app" value="${esc(S.appLink)}" placeholder="https://t.me/бот/shop" autocapitalize="off" spellcheck="false"></div>
-        <div class="f"><label class="lbl mono" for="s-admins">Telegram ID админов, через запятую</label><input class="inp" id="s-admins" value="${esc(S.admins.join(', '))}" inputmode="numeric"></div>
+        <div class="f"><label class="lbl mono" for="s-admins">Админы: username или Telegram ID, через запятую</label><input class="inp" id="s-admins" value="${esc(S.admins.join(', '))}" autocapitalize="off" spellcheck="false"></div>
         ${tgUser && !meIn ? `<button class="link" style="justify-self:start" data-adm-me>Добавить мой ID (${tgUser.id})</button>` : ''}
         <button class="btn btn-quiet" data-adm-settings>Сохранить витрину</button>
       </div>
@@ -1119,7 +1117,7 @@ async function saveSettings(btn) {
     buyer: v('s-buyer').replace(/^@/, ''),
     tape: v('s-tape').split(',').map(x => x.trim()).filter(Boolean),
     appLink: v('s-app'),
-    admins: [...new Set(v('s-admins').split(/[\s,]+/).filter(x => /^\d+$/.test(x)).map(Number))],
+    admins: [...new Set(v('s-admins').split(/[\s,]+/).map(x => x.replace(/^@/, '').toLowerCase()).filter(x => /^(\d+|[a-z][a-z0-9_]{3,31})$/.test(x)))],
   };
   try {
     await run(btn, 'Сохраняю…', 'Настройки витрины', s => { Object.assign(s.settings, patch); });
@@ -1478,7 +1476,7 @@ document.addEventListener('click', e => {
   // админка
   if ((el = hit('[data-adm-connect]'))) { connect(el); return; }
   if (hit('[data-adm-refresh]')) { refreshFromGitHub(false); return; }
-  if (hit('[data-adm-logout]')) { dropAdm(); ls.del('slam_adm'); renderAdmin(); updateAdminTab(); toast('Устройство отключено'); return; }
+  if (hit('[data-adm-logout]')) { dropAdm(); renderAdmin(); updateAdminTab(); toast('Устройство отключено'); return; }
   if (hit('[data-adm-me]')) {
     const inp = $('#s-admins');
     inp.value = [...new Set(inp.value.split(/[\s,]+/).filter(Boolean).concat(String(tgUser.id)))].join(', ');
@@ -1543,7 +1541,7 @@ $('#sort').addEventListener('change', e => { state.sort = e.target.value; render
   }
   [...state.favs].forEach(id => { if (!DATA.products.some(p => p.id === id)) state.favs.delete(id); });
   renderAll();
-  if (location.hash === '#admin') setView('admin');
+  if (location.hash === '#admin' && adminVisible()) setView('admin');
 
   // Открыть товар по ссылке: startapp=item_<id> или #item-<id>
   const start = (inTG && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || '';
