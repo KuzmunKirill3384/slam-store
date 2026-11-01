@@ -278,6 +278,7 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:linear-gradi
 .ok-dot{flex:none;width:7px;height:7px;border-radius:50%;background:#7FC47A;box-shadow:0 0 0 4px rgba(127,196,122,.15)}
 .adm-actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px}
 .items{display:grid;gap:8px}
+.brand-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center}
 .item{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 10px 8px 8px;background:var(--panel);border-radius:14px;cursor:pointer;transition:background .2s}
 .item:active{background:var(--panel-2)}
 .thumb{position:relative;width:52px;height:64px;border-radius:9px;overflow:hidden;background:var(--panel-2)}
@@ -390,7 +391,7 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:linear-gradi
         <li>Фото общим планом, бирки и составник</li>
         <li>Размер по бирке и по факту</li>
         <li>Состояние и дефекты, если есть</li>
-        <li>Цену, за которую готов отдать</li>
+        <li>Цену, за которую отдашь вещь</li>
       </ul>
     </div>
     <div class="block">
@@ -493,7 +494,12 @@ const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const rub = n => Number(n).toLocaleString('ru-RU') + ' ₽';
 const pad = n => String(n).padStart(2, '0');
+const plural = (n, one, few, many) => {
+  const a = n % 100, b = n % 10;
+  return a > 10 && a < 20 ? many : b === 1 ? one : b > 1 && b < 5 ? few : many;
+};
 const tgLink = (user, text) => `https://t.me/${user}` + (text ? `?text=${encodeURIComponent(text)}` : '');
+const RE_USERNAME = /^[A-Za-z][A-Za-z0-9_]{3,31}$/;
 const uid36 = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
 const ICON = {
@@ -527,7 +533,7 @@ const localSrc = {}; // превью только что загруженных 
 const srcOf = path => localSrc[path] || path;
 const brandOf = k => (DATA && DATA.brands[k]) || { name: k, mono: String(k).slice(0, 2).toUpperCase() };
 const full = p => `${brandOf(p.brand).name} ${p.title}`;
-const lot = p => pad(DATA.products.length - order.get(p.id));
+const lot = p => pad(p.lot || DATA.products.length - order.get(p.id));
 function shortSize(p) {
   const s = String(p.size || '');
   if (/факт/i.test(s) && p.fit && p.fit.length) return p.fit.join('-');
@@ -599,7 +605,7 @@ function renderHero() {
   $('#stats').innerHTML = `
     <div><dt>в наличии</dt><dd>${pad(live)}</dd></div>
     <div><dt>продано</dt><dd>${pad(DATA.products.length - live)}</dd></div>
-    <div><dt>брендов</dt><dd>${pad(Object.keys(DATA.brands).length)}</dd></div>`;
+    <div><dt>брендов</dt><dd>${pad(new Set(DATA.products.map(p => p.brand)).size)}</dd></div>`;
   const words = S.tape.length ? S.tape : Object.values(DATA.brands).map(b => b.name);
   const run = words.map(t => `<span>${esc(t)}</span>`).join('');
   $('#tape').innerHTML = run + run + run + run;
@@ -622,8 +628,12 @@ function renderHero() {
       </div>
     </article>` : '';
 
-  $('#sell-btn').href = tgLink(S.buyer || S.contact, 'Привет! Хочу предложить вещь: ');
-  $('#sell-label').textContent = `Написать @${S.buyer || S.contact}`;
+  const buyer = S.buyer || S.contact;
+  $('#sell-btn').hidden = !buyer;
+  if (buyer) {
+    $('#sell-btn').href = tgLink(buyer, 'Привет! Хочу предложить вещь: ');
+    $('#sell-label').textContent = `Написать @${buyer}`;
+  }
 }
 
 function filtered() {
@@ -654,9 +664,10 @@ function renderFilters() {
 
 function renderCatalog() {
   const arr = filtered();
+  $('.controls').hidden = $('.result').hidden = !DATA.products.length;
   $('#grid').innerHTML = arr.length ? arr.map(card).join('')
     : `<div class="empty">${DATA.products.length ? 'Ничего не нашлось под эти фильтры.<button class="link" data-reset>Сбросить фильтры</button>' : 'Каталог пока пуст. Скоро здесь появятся вещи.'}</div>`;
-  $('#found').textContent = `${arr.length} позиций`;
+  $('#found').textContent = `${arr.length} ${plural(arr.length, 'позиция', 'позиции', 'позиций')}`;
   $('#found-r').textContent = `${arr.filter(p => p.status !== 'sold').length} в наличии`;
   $('#reset').hidden = state.status === 'all' && state.brand === 'all' && state.size === 'all' && !state.q;
   $$('[data-k]').forEach(b => b.setAttribute('aria-pressed', state[b.dataset.k] === b.dataset.v));
@@ -744,7 +755,11 @@ function barcode(id) {
 
 function openItem(id) {
   const p = DATA && DATA.products.find(x => x.id === id);
-  if (!p) return;
+  if (!p) {
+    toast('Вещь уже недоступна');
+    try { if (location.hash.startsWith('#item-')) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    return;
+  }
   state.openId = id;
   const S = DATA.settings;
   const b = brandOf(p.brand);
@@ -754,11 +769,13 @@ function openItem(id) {
   const m = p.measure || {};
   const meas = [['pit', 'подмышки'], ['length', 'длина'], ['sleeve', 'рукав']].filter(([k]) => m[k]);
   const seller = p.seller || S.contact;
-  let action;
+  let action = '';
   if (p.status === 'sold') {
-    action = `<a class="btn btn-quiet" href="${tgLink(S.contact || seller, `Привет! Видел ${full(p)}, она уже продана. Есть что-то похожее?`)}" target="_blank" rel="noopener">Спросить похожую</a>`;
+    if (S.contact || seller) action = `<a class="btn btn-quiet" href="${tgLink(S.contact || seller, `Привет! ${full(p)} уже в проданных. Есть что-то похожее?`)}" target="_blank" rel="noopener">Спросить похожее</a>`;
+  } else if (!seller) {
+    action = '';
   } else if (p.status === 'reserved') {
-    action = `<a class="btn btn-quiet" href="${tgLink(seller, `Привет! ${full(p)} сейчас в брони. Если бронь слетит, я готов взять.`)}" target="_blank" rel="noopener">Встать в очередь</a>`;
+    action = `<a class="btn btn-quiet" href="${tgLink(seller, `Привет! ${full(p)} сейчас в брони. Если бронь слетит, хочу взять.`)}" target="_blank" rel="noopener">Встать в очередь</a>`;
   } else {
     action = `<a class="btn btn-primary" href="${tgLink(seller, `Привет! Интересует ${full(p)}, размер ${p.size}, ${rub(p.price || 0)}. Ещё в наличии?`)}" target="_blank" rel="noopener">${ICON.send}Написать @${esc(seller)}</a>`;
   }
@@ -895,7 +912,9 @@ async function gh(path, opts = {}) {
 function ghError(e) {
   const s = e && e.status;
   if (s === -1) return 'Подожди, предыдущее сохранение ещё идёт';
-  if (!s) return 'Нет связи с GitHub. Проверь интернет и попробуй ещё раз';
+  if (s === -2) return 'У бренда есть вещи. Сначала удали или перенеси их';
+  if (s === 0) return 'Нет связи с GitHub. Проверь интернет и попробуй ещё раз';
+  if (!s) return 'Что-то пошло не так. Обнови страницу и попробуй ещё раз';
   if (s === 401) return 'Токен не подходит или истёк. Создай новый и подключи заново';
   if (s === 403) return 'У токена нет прав на запись. Нужно Contents: Read and write';
   if (s === 404) return 'Репозиторий не найден или у токена нет к нему доступа';
@@ -1011,6 +1030,14 @@ function renderAdmin() {
   const feat = DATA.products.filter(p => p.status !== 'sold')
     .map(p => `<option value="${esc(p.id)}" ${S.featured === p.id ? 'selected' : ''}>${esc(full(p))}</option>`).join('');
   const meIn = isListedAdmin();
+  const brandRows = Object.entries(DATA.brands).map(([k, b]) => {
+    const used = DATA.products.filter(p => p.brand === k).length;
+    return `<div class="brand-row">
+      <input class="inp" data-brand-name="${esc(k)}" value="${esc(b.name)}" aria-label="Название бренда ${esc(b.name)}">
+      <button class="link mono" data-brand-save="${esc(k)}">Сохранить</button>
+      ${used ? `<span class="mono muted">${used} шт.</span>` : `<button class="link mono" data-brand-del="${esc(k)}">Удалить</button>`}
+    </div>`;
+  }).join('');
 
   box.innerHTML = `
     <div class="adm-bar"><span class="mono"><i class="ok-dot"></i>${esc(adm.repo)}</span><button class="link mono" data-adm-refresh>Обновить</button></div>
@@ -1037,6 +1064,11 @@ function renderAdmin() {
         ${tgUser && !meIn ? `<button class="link" style="justify-self:start" data-adm-me>Добавить мой ID (${tgUser.id})</button>` : ''}
         <button class="btn btn-quiet" data-adm-settings>Сохранить витрину</button>
       </div>
+    </div>
+
+    <div class="block">
+      <h3 class="mono muted">Бренды · ${Object.keys(DATA.brands).length}</h3>
+      <div class="panel">${brandRows || '<p class="hint">Бренды появятся при добавлении вещей.</p>'}</div>
     </div>
 
     <div class="block">
@@ -1119,9 +1151,30 @@ async function saveSettings(btn) {
     appLink: v('s-app'),
     admins: [...new Set(v('s-admins').split(/[\s,]+/).map(x => x.replace(/^@/, '').toLowerCase()).filter(x => /^(\d+|[a-z][a-z0-9_]{3,31})$/.test(x)))],
   };
+  if ([patch.contact, patch.buyer].some(u => u && !RE_USERNAME.test(u))) return toast('Контакт: нужен username из Telegram, только латиница, цифры и _');
   try {
     await run(btn, 'Сохраняю…', 'Настройки витрины', s => { Object.assign(s.settings, patch); });
     toast('Витрина сохранена');
+  } catch (e) { toast(ghError(e)); }
+}
+
+async function saveBrand(btn, key) {
+  const name = $(`[data-brand-name="${CSS.escape(key)}"]`).value.trim();
+  if (!name) return toast('Напиши название бренда');
+  try {
+    await run(btn, '…', `Бренд: ${name}`, s => { if (s.brands[key]) s.brands[key].name = name; });
+    toast('Бренд сохранён');
+  } catch (e) { toast(ghError(e)); }
+}
+
+async function deleteBrand(btn, key) {
+  const name = brandOf(key).name;
+  try {
+    await run(btn, '…', `Удалён бренд: ${name}`, s => {
+      if (s.products.some(p => p.brand === key)) { const e = new Error('brand_in_use'); e.status = -2; throw e; }
+      delete s.brands[key];
+    });
+    toast('Бренд удалён');
   } catch (e) { toast(ghError(e)); }
 }
 
@@ -1398,6 +1451,7 @@ async function saveForm(btn) {
   if (!size) return formErr('Укажи размер');
   if (status !== 'sold' && !price) return formErr('Укажи цену');
   if (status !== 'sold' && !seller) return formErr('Укажи продавца');
+  if (seller && !RE_USERNAME.test(seller)) return formErr('Продавец: нужен username из Telegram, только латиница, цифры и _');
   formErr('');
 
   const fit = $$('[data-efit][aria-pressed="true"]').map(b => b.dataset.efit);
@@ -1422,6 +1476,8 @@ async function saveForm(btn) {
       s => {
         if (newBrand) s.brands[brand] = newBrand;
         const i = s.products.findIndex(x => x.id === prod.id);
+        if (i >= 0) Object.assign(prod, { lot: s.products[i].lot, tgPost: s.products[i].tgPost });
+        if (!prod.lot) { prod.lot = s.settings.nextLot || 1; s.settings.nextLot = prod.lot + 1; }
         if (i >= 0) s.products[i] = prod; else s.products.unshift(prod);
       },
       { add, remove: snapshot.removed });
@@ -1485,6 +1541,8 @@ document.addEventListener('click', e => {
     return;
   }
   if ((el = hit('[data-adm-settings]'))) { saveSettings(el); return; }
+  if ((el = hit('[data-brand-save]'))) { saveBrand(el, el.dataset.brandSave); return; }
+  if ((el = hit('[data-brand-del]'))) { deleteBrand(el, el.dataset.brandDel); return; }
   if (hit('[data-new]')) { openForm(null); return; }
   if ((el = hit('[data-edit]'))) { openForm(el.dataset.edit); return; }
   if ((el = hit('[data-efit]'))) { el.setAttribute('aria-pressed', el.getAttribute('aria-pressed') !== 'true'); haptic('select'); return; }
@@ -1539,7 +1597,8 @@ $('#sort').addEventListener('change', e => { state.sort = e.target.value; render
     $('#grid').innerHTML = `<div class="empty">Не удалось загрузить каталог. Проверь интернет.<button class="link" onclick="location.reload()">Обновить</button></div>`;
     return;
   }
-  [...state.favs].forEach(id => { if (!DATA.products.some(p => p.id === id)) state.favs.delete(id); });
+  const staleFavs = [...state.favs].filter(id => !DATA.products.some(p => p.id === id));
+  if (staleFavs.length) { staleFavs.forEach(id => state.favs.delete(id)); saveFavs(); }
   renderAll();
   if (location.hash === '#admin' && adminVisible()) setView('admin');
 
