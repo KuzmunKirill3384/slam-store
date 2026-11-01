@@ -444,6 +444,7 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:linear-gradi
 const CONFIG = {
   branch: 'main',  // ветка репозитория с сайтом
   repo: '',        // логин/репозиторий; если пусто, определится по адресу GitHub Pages
+  api: '',         // адрес Worker; пока пусто, админка работает с токеном GitHub
 };
 
 const KNOWN_ART = ['si', 'cp', 'lonsdale', 'gutterade']; // бренды со своей заглушкой
@@ -702,7 +703,7 @@ function setView(v) {
   });
   window.scrollTo(0, 0);
   haptic('select');
-  if (v === 'admin') { renderAdmin(); if (adm.token) refreshFromGitHub(); }
+  if (v === 'admin') { renderAdmin(); refreshFromGitHub(); }
 }
 
 /* ---------- Шторка ---------- */
@@ -856,7 +857,7 @@ function resetFilters() {
 /* =====================================================================
    Админка: каталог хранится в store.json репозитория, правки идут коммитами
    ===================================================================== */
-const adm = { repo: '', token: '', busy: false, missing: false };
+const adm = { repo: '', token: '', busy: false, missing: false, api: false, channel: false };
 
 function guessRepo() {
   if (CONFIG.repo) return CONFIG.repo;
@@ -889,13 +890,50 @@ function isListedAdmin() {
   return DATA.settings.admins.some(a => me.includes(String(a).replace(/^@/, '').toLowerCase()));
 }
 function adminVisible() {
-  if (adm.token) return true;
+  if (adm.token || adm.api) return true;
   return inTG ? isListedAdmin() : location.hash === '#admin';
 }
 function updateAdminTab() {
   const on = adminVisible();
   $('#admin-tab').hidden = !on;
   $('#nav').classList.toggle('four', on);
+}
+
+/* ---------- Worker ---------- */
+const API_ERRORS = {
+  unauthorized: 'Telegram не подтвердил вход. Закрой магазин и открой заново',
+  forbidden: 'У этого аккаунта нет прав админа',
+  conflict: 'Каталог только что изменили. Нажми «Обновить» и повтори',
+  brand_in_use: 'У бренда есть вещи. Сначала удали или перенеси их',
+  not_found: 'Вещь не найдена. Нажми «Обновить»',
+  github: 'Сервер не смог записать каталог. Попробуй позже',
+  photo: 'Фото не загрузилось. Попробуй другое',
+  photo_format: 'Этот формат фото не подходит. Пришли JPG или PNG',
+  too_many_photos: 'Не больше 10 фото на вещь',
+  seller: 'Продавец: нужен username из Telegram',
+  contact: 'Контакт: нужен username из Telegram',
+  buyer: 'Контакт скупки: нужен username из Telegram',
+  app_link: 'Ссылка на Mini App должна начинаться с https://t.me/',
+};
+
+async function api(path, method = 'GET', body) {
+  const headers = { Authorization: `tma ${tg.initData}` };
+  if (body) headers['Content-Type'] = 'application/json';
+  let r;
+  try { r = await fetch(CONFIG.api + path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' }); }
+  catch (e) { const err = new Error('network'); err.apiCode = 'network'; throw err; }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const err = new Error(data.error || r.status); err.apiCode = data.error || 'unknown'; throw err; }
+  return data;
+}
+
+// Вкладка появится, только если сервер подтвердил подпись и нашёл пользователя в списке
+async function checkApi() {
+  if (!CONFIG.api || !inTG) return;
+  try {
+    adm.api = (await api('/me')).admin === true;
+    updateAdminTab();
+  } catch (e) {}
 }
 
 /* ---------- GitHub API ---------- */
@@ -910,6 +948,8 @@ async function gh(path, opts = {}) {
 }
 
 function ghError(e) {
+  if (e && e.apiCode === 'network') return 'Нет связи с сервером. Проверь интернет и попробуй ещё раз';
+  if (e && e.apiCode) return API_ERRORS[e.apiCode] || 'Проверь поля и попробуй ещё раз';
   const s = e && e.status;
   if (s === -1) return 'Подожди, предыдущее сохранение ещё идёт';
   if (s === -2) return 'У бренда есть вещи. Сначала удали или перенеси их';
@@ -970,8 +1010,16 @@ async function commit(message, mutate, { add = {}, remove = [] } = {}) {
 }
 
 async function refreshFromGitHub(silent = true) {
-  if (!adm.token || adm.busy) return;
+  if ((!adm.token && !adm.api) || adm.busy) return;
   try {
+    if (adm.api) {
+      const r = await api('/store');
+      adm.channel = r.channel;
+      DATA = normalize(r.store);
+      renderAll();
+      if (!silent) toast('Каталог обновлён');
+      return;
+    }
     const fresh = await readStoreAt(await headSha());
     adm.missing = !fresh;
     if (fresh) { DATA = fresh; renderAll(); }
@@ -1015,7 +1063,7 @@ function thumb(p) {
 
 function renderAdmin() {
   const box = $('#adm-body');
-  if (!adm.token) { box.innerHTML = setupHTML(); return; }
+  if (!adm.token && !adm.api) { box.innerHTML = setupHTML(); return; }
   const S = DATA.settings;
   const items = DATA.products.slice().sort((a, b) => RANK[a.status] - RANK[b.status] || order.get(a.id) - order.get(b.id));
   const rows = items.map(p => `
@@ -1040,7 +1088,7 @@ function renderAdmin() {
   }).join('');
 
   box.innerHTML = `
-    <div class="adm-bar"><span class="mono"><i class="ok-dot"></i>${esc(adm.repo)}</span><button class="link mono" data-adm-refresh>Обновить</button></div>
+    <div class="adm-bar"><span class="mono"><i class="ok-dot"></i>${adm.api ? 'сервер магазина' : esc(adm.repo)}</span><button class="link mono" data-adm-refresh>Обновить</button></div>
     ${adm.missing ? '<p class="hint" style="margin-top:10px">store.json в репозитории не найден. Он создастся при первом сохранении.</p>' : ''}
     <div class="adm-actions"><button class="btn btn-primary" data-new>${ICON.plus}Добавить вещь</button></div>
 
@@ -1060,8 +1108,8 @@ function renderAdmin() {
         </div>
         <div class="f"><label class="lbl mono" for="s-tape">Бегущая лента, через запятую</label><textarea class="inp" id="s-tape" rows="2">${esc(S.tape.join(', '))}</textarea></div>
         <div class="f"><label class="lbl mono" for="s-app">Ссылка на Mini App</label><input class="inp" id="s-app" value="${esc(S.appLink)}" placeholder="https://t.me/бот/shop" autocapitalize="off" spellcheck="false"></div>
-        <div class="f"><label class="lbl mono" for="s-admins">Админы: username или Telegram ID, через запятую</label><input class="inp" id="s-admins" value="${esc(S.admins.join(', '))}" autocapitalize="off" spellcheck="false"></div>
-        ${tgUser && !meIn ? `<button class="link" style="justify-self:start" data-adm-me>Добавить мой ID (${tgUser.id})</button>` : ''}
+        ${adm.api ? '' : `<div class="f"><label class="lbl mono" for="s-admins">Админы: username или Telegram ID, через запятую</label><input class="inp" id="s-admins" value="${esc(S.admins.join(', '))}" autocapitalize="off" spellcheck="false"></div>
+        ${tgUser && !meIn ? `<button class="link" style="justify-self:start" data-adm-me>Добавить мой ID (${tgUser.id})</button>` : ''}`}
         <button class="btn btn-quiet" data-adm-settings>Сохранить витрину</button>
       </div>
     </div>
@@ -1071,9 +1119,9 @@ function renderAdmin() {
       <div class="panel">${brandRows || '<p class="hint">Бренды появятся при добавлении вещей.</p>'}</div>
     </div>
 
-    <div class="block">
+    ${adm.api ? '' : `<div class="block">
       <button class="btn btn-danger wide" data-adm-logout>Отключить это устройство</button>
-    </div>`;
+    </div>`}`;
 }
 
 async function connect(btn) {
@@ -1107,16 +1155,21 @@ function busy(btn, on, text) {
   else { if (btn.dataset.label) btn.innerHTML = btn.dataset.label; btn.disabled = false; adm.busy = false; }
 }
 
-async function run(btn, label, message, mutate, files) {
+async function run(btn, label, message, mutate, files, viaApi) {
   if (adm.busy) { const e = new Error('busy'); e.status = -1; throw e; }
   busy(btn, true, label);
   try {
-    const next = await commit(message, mutate, files);
-    DATA = next;
+    let result = null;
+    if (adm.api) {
+      result = await viaApi();
+      DATA = normalize(result.store);
+    } else {
+      DATA = await commit(message, mutate, files);
+    }
     busy(btn, false);
     renderAll();
     haptic('success');
-    return next;
+    return result;
   } catch (e) {
     busy(btn, false);
     haptic('error');
@@ -1133,7 +1186,7 @@ async function quickStatus(sel) {
     await run(null, '', `${full(p)}: ${STATUS[st].toLowerCase()}`, s => {
       const x = s.products.find(y => y.id === id);
       if (x) x.status = st;
-    });
+    }, undefined, () => api(`/products/${encodeURIComponent(id)}/status`, 'PATCH', { status: st }));
     toast(`${STATUS[st]}. На сайте через минуту`);
   } catch (e) {
     sel.value = p.status; sel.dataset.s = p.status; sel.disabled = false;
@@ -1149,11 +1202,11 @@ async function saveSettings(btn) {
     buyer: v('s-buyer').replace(/^@/, ''),
     tape: v('s-tape').split(',').map(x => x.trim()).filter(Boolean),
     appLink: v('s-app'),
-    admins: [...new Set(v('s-admins').split(/[\s,]+/).map(x => x.replace(/^@/, '').toLowerCase()).filter(x => /^(\d+|[a-z][a-z0-9_]{3,31})$/.test(x)))],
   };
+  if (!adm.api) patch.admins = [...new Set(v('s-admins').split(/[\s,]+/).map(x => x.replace(/^@/, '').toLowerCase()).filter(x => /^(\d+|[a-z][a-z0-9_]{3,31})$/.test(x)))];
   if ([patch.contact, patch.buyer].some(u => u && !RE_USERNAME.test(u))) return toast('Контакт: нужен username из Telegram, только латиница, цифры и _');
   try {
-    await run(btn, 'Сохраняю…', 'Настройки витрины', s => { Object.assign(s.settings, patch); });
+    await run(btn, 'Сохраняю…', 'Настройки витрины', s => { Object.assign(s.settings, patch); }, undefined, () => api('/settings', 'PUT', patch));
     toast('Витрина сохранена');
   } catch (e) { toast(ghError(e)); }
 }
@@ -1162,7 +1215,8 @@ async function saveBrand(btn, key) {
   const name = $(`[data-brand-name="${CSS.escape(key)}"]`).value.trim();
   if (!name) return toast('Напиши название бренда');
   try {
-    await run(btn, '…', `Бренд: ${name}`, s => { if (s.brands[key]) s.brands[key].name = name; });
+    await run(btn, '…', `Бренд: ${name}`, s => { if (s.brands[key]) s.brands[key].name = name; }, undefined,
+      () => api(`/brands/${encodeURIComponent(key)}`, 'PUT', { name, mono: brandOf(key).mono }));
     toast('Бренд сохранён');
   } catch (e) { toast(ghError(e)); }
 }
@@ -1173,7 +1227,7 @@ async function deleteBrand(btn, key) {
     await run(btn, '…', `Удалён бренд: ${name}`, s => {
       if (s.products.some(p => p.brand === key)) { const e = new Error('brand_in_use'); e.status = -2; throw e; }
       delete s.brands[key];
-    });
+    }, undefined, () => api(`/brands/${encodeURIComponent(key)}`, 'DELETE'));
     toast('Бренд удалён');
   } catch (e) { toast(ghError(e)); }
 }
@@ -1346,6 +1400,8 @@ function formHTML(p, isNew) {
           <textarea class="inp" id="e-desc" rows="3" placeholder="История вещи, коллекция, особенности">${esc(p.desc || '')}</textarea></div>
       </div>
 
+      ${isNew && adm.channel ? '<div class="panel"><label class="switch"><span>Опубликовать в канал</span><input type="checkbox" id="e-publish" checked></label></div>' : ''}
+
       ${isNew ? '' : '<button class="btn btn-danger wide" data-del>Удалить вещь</button>'}
     </div>
     <div class="actions">
@@ -1470,8 +1526,22 @@ async function saveForm(btn) {
   const add = {};
   ed.photos.filter(x => x.b64).forEach(x => { add[x.path] = x.b64; });
   const snapshot = ed;
+  const publish = !!($('#e-publish') && $('#e-publish').checked);
+  // Фото уходят на сервер по одному, он сам назначает им пути
+  const viaApi = async () => {
+    const uploads = {};
+    const photos = [];
+    for (const ph of snapshot.photos) {
+      if (!ph.b64) { photos.push(ph.path); continue; }
+      const r = await api('/photos', 'POST', { b64: ph.b64, item: snapshot.id });
+      uploads[r.path] = r.sha;
+      photos.push(r.path);
+      localSrc[r.path] = ph.src;
+    }
+    return api(`/products/${encodeURIComponent(snapshot.id)}`, 'PUT', { ...prod, photos, uploads, newBrand, publish });
+  };
   try {
-    await run(btn, Object.keys(add).length ? 'Загружаю фото…' : 'Сохраняю…',
+    const result = await run(btn, Object.keys(add).length ? 'Загружаю фото…' : 'Сохраняю…',
       `${snapshot.isNew ? 'Новая вещь' : 'Правка'}: ${(newBrand || brandOf(brand)).name} ${title}`,
       s => {
         if (newBrand) s.brands[brand] = newBrand;
@@ -1480,10 +1550,10 @@ async function saveForm(btn) {
         if (!prod.lot) { prod.lot = s.settings.nextLot || 1; s.settings.nextLot = prod.lot + 1; }
         if (i >= 0) s.products[i] = prod; else s.products.unshift(prod);
       },
-      { add, remove: snapshot.removed });
+      { add, remove: snapshot.removed }, viaApi);
     snapshot.photos.forEach(x => { if (x.b64) localSrc[x.path] = x.src; });
     closeSheet();
-    toast('Сохранено. На сайте через минуту');
+    toast(result && result.published === false ? 'Сохранено, но в канал пост не ушёл' : 'Сохранено. На сайте через минуту');
   } catch (e) { formErr(ghError(e)); }
 }
 
@@ -1502,7 +1572,7 @@ async function deleteItem(btn) {
     await run(btn, 'Удаляю…', `Удалена: ${full(p)}`, s => {
       s.products = s.products.filter(x => x.id !== id);
       if (s.settings.featured === id) s.settings.featured = '';
-    }, { remove: paths });
+    }, { remove: paths }, () => api(`/products/${encodeURIComponent(id)}`, 'DELETE'));
     state.favs.delete(id);
     closeSheet();
     toast('Вещь удалена');
@@ -1600,6 +1670,7 @@ $('#sort').addEventListener('change', e => { state.sort = e.target.value; render
   const staleFavs = [...state.favs].filter(id => !DATA.products.some(p => p.id === id));
   if (staleFavs.length) { staleFavs.forEach(id => state.favs.delete(id)); saveFavs(); }
   renderAll();
+  checkApi();
   if (location.hash === '#admin' && adminVisible()) setView('admin');
 
   // Открыть товар по ссылке: startapp=item_<id> или #item-<id>

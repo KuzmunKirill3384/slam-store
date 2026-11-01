@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { open, makeStore, product, fakeGitHub } = require('./helpers');
+const { open, makeStore, product, fakeGitHub, fakeWorker } = require('./helpers');
 
 const ADMIN = { id: 1, username: 'workpagerepetitor', first_name: 'A' };
 const SECOND = { id: 2, username: 'AmbSSL', first_name: 'B' };
@@ -165,5 +165,118 @@ test.describe('админка с токеном', () => {
     await page.locator('[data-brand-del="empty"]').click();
     await expect(page.locator('#toast')).toHaveText('Бренд удалён');
     expect(repo.store.brands.empty).toBeUndefined();
+  });
+});
+
+test.describe('админка через Worker', () => {
+  const API = 'https://api.test';
+  // В store.json никого нет: решает только ответ сервера
+  const noList = (products = []) => makeStore(products, { admins: [] });
+
+  async function openAdmin(page, store, opts) {
+    const srv = await fakeWorker(page, store, opts);
+    await open(page, { user: BUYER, store, api: API });
+    await page.locator('#admin-tab').click();
+    await expect(page.locator('[data-new]')).toBeVisible();
+    return srv;
+  }
+
+  test('вкладка появляется только после ответа сервера', async ({ page }) => {
+    const srv = await fakeWorker(page, noList(), { admin: true });
+    await open(page, { user: BUYER, store: noList(), api: API });
+    await expect(page.locator('#admin-tab')).toBeVisible();
+    expect(srv.calls[0].auth).toBe('tma signed');
+  });
+
+  test('сервер ответил «не админ»: вкладки нет', async ({ page }) => {
+    const srv = await fakeWorker(page, noList(), { admin: false });
+    await open(page, { user: BUYER, store: noList(), api: API });
+    await expect.poll(() => srv.calls.length).toBe(1);
+    await page.waitForTimeout(100);
+    await expect(page.locator('#admin-tab')).toBeHidden();
+  });
+
+  test('сервер недоступен: витрина работает, вкладки нет', async ({ page }) => {
+    await fakeWorker(page, noList([product('a')]), { down: true });
+    await open(page, { user: BUYER, store: noList([product('a')]), api: API });
+    await expect(page.locator('[data-id="a"]')).toBeVisible();
+    await expect(page.locator('#admin-tab')).toBeHidden();
+  });
+
+  test('в браузере вне Telegram к серверу не обращается', async ({ page }) => {
+    const srv = await fakeWorker(page, noList());
+    await open(page, { store: noList(), api: API });
+    await page.waitForTimeout(200);
+    expect(srv.calls).toHaveLength(0);
+  });
+
+  test('нет ни токена, ни поля админов, ни кнопки отключения', async ({ page }) => {
+    await openAdmin(page, noList());
+    await expect(page.locator('#a-token')).toHaveCount(0);
+    await expect(page.locator('#s-admins')).toHaveCount(0);
+    await expect(page.locator('[data-adm-logout]')).toHaveCount(0);
+  });
+
+  test('новая вещь с фото: сервер назначает путь, GitHub не вызывается', async ({ page }) => {
+    let ghCalls = 0;
+    await page.route('https://api.github.com/**', r => { ghCalls++; r.abort(); });
+    const srv = await openAdmin(page, noList(), { channel: true });
+    await page.locator('[data-new]').click();
+    await page.fill('#e-title', 'Кепка');
+    await page.fill('#e-size', 'O/S');
+    await page.fill('#e-price', '5500');
+    await page.fill('#e-seller', 'ambssl');
+    await page.setInputFiles('#e-file', { name: 'a.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg==', 'base64') });
+    await expect(page.locator('#e-photos img')).toHaveCount(1);
+    await expect(page.locator('#e-publish')).toBeChecked();
+    await page.locator('[data-save]').click();
+    await expect(page.locator('.item-t')).toHaveText('Кепка');
+    const put = srv.calls.find(c => c.method === 'PUT');
+    expect(put.body.photos).toEqual(['img/srv-1.jpg']);
+    expect(put.body.uploads).toEqual({ 'img/srv-1.jpg': 'a'.repeat(40) });
+    expect(put.body.publish).toBe(true);
+    expect(ghCalls).toBe(0);
+  });
+
+  test('без канала переключателя нет', async ({ page }) => {
+    await openAdmin(page, noList(), { channel: false });
+    await page.locator('[data-new]').click();
+    await expect(page.locator('#e-publish')).toHaveCount(0);
+  });
+
+  test('сбой публикации виден, вещь сохранена', async ({ page }) => {
+    const srv = await openAdmin(page, noList(), { channel: true });
+    srv.failPublish = true;
+    await page.locator('[data-new]').click();
+    await page.fill('#e-title', 'Кепка');
+    await page.fill('#e-size', 'M');
+    await page.fill('#e-price', '100');
+    await page.fill('#e-seller', 'ambssl');
+    await page.locator('[data-save]').click();
+    await expect(page.locator('#toast')).toHaveText('Сохранено, но в канал пост не ушёл');
+    expect(srv.store.products).toHaveLength(1);
+  });
+
+  test('статус и удаление идут через сервер', async ({ page }) => {
+    const srv = await openAdmin(page, noList([product('a')]));
+    await page.locator('.st-sel').selectOption('sold');
+    await expect(page.locator('#toast')).toContainText('Продано');
+    expect(srv.store.products[0].status).toBe('sold');
+    await page.locator('.item').click();
+    await page.locator('[data-del]').click();
+    await page.locator('[data-del]').click();
+    await expect(page.locator('#toast')).toHaveText('Вещь удалена');
+    expect(srv.store.products).toHaveLength(0);
+  });
+
+  test('ошибка сервера показывается понятным текстом', async ({ page }) => {
+    await openAdmin(page, noList());
+    await page.locator('[data-new]').click();
+    await page.fill('#e-title', 'Кепка');
+    await page.fill('#e-size', 'M');
+    await page.fill('#e-price', '100');
+    await page.fill('#e-seller', 'taken_conflict');
+    await page.locator('[data-save]').click();
+    await expect(page.locator('#e-err')).toContainText('Каталог только что изменили');
   });
 });

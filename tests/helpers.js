@@ -16,12 +16,18 @@ const tgStub = user => `window.Telegram = { WebApp: {
 } };`;
 
 // Открывает сайт: настоящий index.html, подставные Telegram и store.json
-async function open(page, { user = null, store = makeStore(), hash = '', storage = {} } = {}) {
+async function open(page, { user = null, store = makeStore(), hash = '', storage = {}, api = '' } = {}) {
   await page.route('https://telegram.org/js/**', r => r.fulfill({ contentType: 'text/javascript', body: user ? tgStub(user) : '' }));
   await page.route(/localhost:\d+\/store\.json/, r => r.fulfill({ json: store }));
   await page.route('https://fonts.googleapis.com/**', r => r.abort());
   await page.route('https://fonts.gstatic.com/**', r => r.abort());
   if (Object.keys(storage).length) await page.addInitScript(s => { Object.entries(s).forEach(([k, v]) => localStorage.setItem(k, v)); }, storage);
+  if (api) {
+    await page.route(/localhost:\d+\/index\.html/, async r => {
+      const res = await r.fetch();
+      r.fulfill({ response: res, body: (await res.text()).replace("api: '',", `api: '${api}',`) });
+    });
+  }
   await page.goto('index.html' + hash);
   await page.waitForFunction(() => document.querySelector('#stats dd').textContent !== '··');
 }
@@ -56,4 +62,36 @@ function fakeGitHub(page, start) {
   }).then(() => repo);
 }
 
-module.exports = { open, makeStore, product, fakeGitHub };
+// Сервер магазина в памяти: отвечает так же, как Worker
+function fakeWorker(page, start, { admin = true, channel = false, down = false } = {}) {
+  const srv = { store: JSON.parse(JSON.stringify(start)), calls: [], photos: 0 };
+  const headers = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE', 'access-control-allow-headers': 'authorization,content-type' };
+  return page.route('https://api.test/**', async route => {
+    const req = route.request();
+    const method = req.method();
+    if (method === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    if (down) return route.abort();
+    const path = new URL(req.url()).pathname;
+    const body = req.postDataJSON();
+    srv.calls.push({ method, path, body, auth: req.headers().authorization });
+    const json = (data, status = 200) => route.fulfill({ json: data, status, headers });
+    if (path === '/me') return json({ admin });
+    if (!admin) return json({ error: 'forbidden' }, 403);
+    if (path === '/store') return json({ store: srv.store, channel });
+    if (path === '/photos') return json({ path: `img/srv-${++srv.photos}.jpg`, sha: 'a'.repeat(40) });
+    const m = path.match(/^\/products\/([^/]+)(\/status)?$/);
+    if (m && method === 'PUT') {
+      if (body.seller === 'taken_conflict') return json({ error: 'conflict' }, 409);
+      const i = srv.store.products.findIndex(p => p.id === m[1]);
+      const { uploads, newBrand, publish, ...p } = body;
+      if (i >= 0) srv.store.products[i] = p; else srv.store.products.unshift(p);
+      return json({ store: srv.store, ...(publish ? { published: !srv.failPublish } : {}) });
+    }
+    if (m && method === 'PATCH') { srv.store.products.find(p => p.id === m[1]).status = body.status; return json({ store: srv.store }); }
+    if (m && method === 'DELETE') { srv.store.products = srv.store.products.filter(p => p.id !== m[1]); return json({ store: srv.store }); }
+    if (path === '/settings') { Object.assign(srv.store.settings, body); return json({ store: srv.store }); }
+    return json({ error: 'not_found' }, 404);
+  }).then(() => srv);
+}
+
+module.exports = { open, makeStore, product, fakeGitHub, fakeWorker };
