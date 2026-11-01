@@ -1,0 +1,18 @@
+name = "slam-store-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Секреты задаются командой wrangler secret put и здесь не хранятся:
+# BOT_TOKEN, GITHUB_TOKEN, WEBHOOK_SECRET
+[vars]
+GITHUB_REPO = "KuzmunKirill3384/slam-store"
+BRANCH = "main"
+ALLOWED_ORIGIN = "https://kuzmunkirill3384.github.io"
+SITE_URL = "https://kuzmunkirill3384.github.io/slam-store/"
+APP_LINK = "https://t.me/SlamStoreSPB_bot/shop"
+ADMINS = "workpagerepetitor,ambssl"
+CHANNEL = "" # @username канала; пока пусто, публикация выключена
+
+[[kv_namespaces]]
+binding = "KV"
+id = "ЗАМЕНИ_НА_ID_ИЗ_wrangler_kv_namespace_create"
